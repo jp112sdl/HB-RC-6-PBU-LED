@@ -19,43 +19,43 @@
 #include <Remote.h>
 
 #ifdef __AVR_ATmega328P__
-#define CONFIG_BUTTON_PIN 8
-#define WSLED_PIN         9
-#define ONBOARD_LED_PIN1  4
-#define ONBOARD_LED_PIN2  5
-#define CC1101_CS         10
-#define CC1101_GDO0       2
-#define BTN1_PIN          14
-#define BTN2_PIN          15
-#define BTN3_PIN          16
-#define BTN4_PIN          17
-#define BTN5_PIN          18
-#define BTN6_PIN          19
+#define CONFIG_BUTTON_PIN   8
+#define WSLED_PIN           9
+#define WSLED_ACTIVATE_PIN  6
+#define ONBOARD_LED_PIN1    4
+#define ONBOARD_LED_PIN2    5
+#define CC1101_CS          10
+#define CC1101_GDO0         2
+#define BTN1_PIN           14
+#define BTN2_PIN           15
+#define BTN3_PIN           16
+#define BTN4_PIN           17
+#define BTN5_PIN           18
+#define BTN6_PIN           19
 #endif
 
 #ifdef __AVR_ATmega644P__
 //Pin Definitionen (when using 644P(A): use Standard Pinout)
-#define CONFIG_BUTTON_PIN 1       //PB1
-#define WSLED_PIN         13      //PD5
-#define ONBOARD_LED_PIN1  18      //PC2
-#define ONBOARD_LED_PIN2  19      //PC3
-#define CC1101_CS         4       //PB4
-#define CC1101_GDO0       10      //PD2
-#define BTN1_PIN          24      //PA0
-#define BTN2_PIN          25      //PA1
-#define BTN3_PIN          26      //PA2
-#define BTN4_PIN          27      //PA3
-#define BTN5_PIN          28      //PA4
-#define BTN6_PIN          29      //PA5
+#define CONFIG_BUTTON_PIN   1      //PB1
+#define WSLED_PIN          13      //PD5
+#define WSLED_ACTIVATE_PIN 20      //PC4
+#define ONBOARD_LED_PIN1   18      //PC2
+#define ONBOARD_LED_PIN2   19      //PC3
+#define CC1101_CS           4      //PB4
+#define CC1101_GDO0        10      //PD2
+#define BTN1_PIN           24      //PA0
+#define BTN2_PIN           25      //PA1
+#define BTN3_PIN           26      //PA2
+#define BTN4_PIN           27      //PA3
+#define BTN5_PIN           28      //PA4
+#define BTN6_PIN           29      //PA5
 #endif
 
 
 //Einstellungen für die RGB LEDs
 #define WSNUM_LEDS    6
-#define WSLED_TYPE    WS2812B    //LED Typ
+#define WSLED_TYPE    SK6812    //LED Typ
 #define WSCOLOR_ORDER GRB        //Farbreihenfolge
-CRGB    leds[WSNUM_LEDS];
-
 
 #define PEERS_PER_LED_CHANNEL  4
 #define PEERS_PER_RC_CHANNEL   4
@@ -111,6 +111,66 @@ class OUList3 : public SwitchList3Tmpl<SwPeerListEx> {
     }
 };
 
+class Pixels {
+private:
+  uint8_t state;
+  bool pwr;
+protected:
+  CRGB    leds[WSNUM_LEDS];
+private:
+#ifdef WSLED_ACTIVATE_PIN
+   void powerUp() {
+     if (pwr == false) {
+       digitalWrite(WSLED_ACTIVATE_PIN, LOW);
+       _delay_ms(5);
+       pwr = true;
+     }
+   }
+
+   void powerDown() {
+     FastLED.show();
+     if (pwr == true) {
+       digitalWrite(WSLED_ACTIVATE_PIN, HIGH);
+       pwr = false;
+     }
+   }
+#else
+   void powerUp() {}
+   void powerDown() { FastLED.show(); }
+#endif
+public:
+  Pixels () : state(0), pwr(false) {}
+   ~Pixels () {}
+
+   void init() {
+#ifdef WSLED_ACTIVATE_PIN
+     pinMode(WSLED_ACTIVATE_PIN, OUTPUT);
+#endif
+     powerUp();
+     FastLED.addLeds<WSLED_TYPE, WSLED_PIN, WSCOLOR_ORDER>(leds, WSNUM_LEDS);
+     FastLED.setBrightness(255);
+
+     uint32_t bootColors[3] = {CRGB::Red, CRGB::Green, CRGB::Blue };
+
+     for (uint8_t i = 0; i < 3; i++) {
+       fill_solid(leds, WSNUM_LEDS, bootColors[i]);
+       FastLED.show();
+       _delay_ms(400);
+     }
+     fill_solid(leds, WSNUM_LEDS, CRGB::Black);
+
+     powerDown();
+   }
+
+   void setLed(uint8_t ledNum, uint8_t color, uint8_t brightness) {
+     if (brightness > 0) state |= 1UL << (ledNum); else state &= ~(1UL << (ledNum));
+     leds[ledNum] = CHSV(color, color < 200 ? 255 : 0, brightness);
+     if ( state >  0 ) powerUp();
+     FastLED.show();
+     if ( state == 0 ) powerDown();
+   }
+} pixels;
+
 class LEDChannel : public ActorChannel<Hal, LEDList1, OUList3, PEERS_PER_LED_CHANNEL, OUList0, SwitchStateMachine>  {
   public:
   class LEDOffDelayAlarm : public Alarm {
@@ -143,7 +203,7 @@ class LEDChannel : public ActorChannel<Hal, LEDList1, OUList3, PEERS_PER_LED_CHA
 
       void trigger (__attribute__ ((unused)) AlarmClock& clock)  {
         this->set(decis2ticks(decis));
-        leds[chan.number() -7 ] = CHSV(chan.Color(), chan.Color() < 200 ? 255 : 0, even ? chan.Brightness() : 0);
+        pixels.setLed(chan.number() -7 , chan.Color(), even ? chan.Brightness() : 0);
         even = !even;
         clock.add(*this);
       }
@@ -168,7 +228,7 @@ class LEDChannel : public ActorChannel<Hal, LEDList1, OUList3, PEERS_PER_LED_CHA
     }
 
     void updateLED(bool blackOut=false) {
-      leds[number() -7 ] = CHSV(color, color < 200 ? 255 : 0, blackOut ? 0 : brightness);
+      pixels.setLed(number() -7 , color, blackOut ? 0: brightness);
     }
 
     void ledOff(bool setCh) {
@@ -345,26 +405,10 @@ class OUDevice : public ChannelDevice<Hal, VirtBaseChannel<Hal, OUList0>, 12, OU
 OUDevice sdev(devinfo, 0x20);
 ConfigButton<OUDevice> cfgBtn(sdev);
 
-void initFastLED() {
-  FastLED.addLeds<WSLED_TYPE, WSLED_PIN, WSCOLOR_ORDER>(leds, WSNUM_LEDS);
-  FastLED.setBrightness(255);
-
-  uint32_t bootColors[3] = {CRGB::Red, CRGB::Green, CRGB::Blue };
-
-  for (uint8_t i = 0; i < 3; i++) {
-    fill_solid(leds, WSNUM_LEDS, bootColors[i]);
-    FastLED.show();
-    _delay_ms(400);
-  }
-
-  fill_solid(leds, WSNUM_LEDS, CRGB::Black);
-  FastLED.show();
-}
-
 void setup () {
   DINIT(57600, ASKSIN_PLUS_PLUS_IDENTIFIER);
+  pixels.init();
   sdev.init(hal);
-  initFastLED();
 
   buttonISR(cfgBtn, CONFIG_BUTTON_PIN);
   remoteChannelISR(sdev.remoteChannel(1), BTN1_PIN);
@@ -386,8 +430,6 @@ void loop() {
   bool worked = hal.runready();
   bool poll = sdev.pollRadio();
   if ( worked == false && poll == false ) {
-    //if ()
-    //hal.activity.savePower<Idle<true>>(hal);
+    hal.activity.savePower<Idle<>>(hal);
   }
-  FastLED.show();
 }
