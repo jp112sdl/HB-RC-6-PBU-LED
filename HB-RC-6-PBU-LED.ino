@@ -18,8 +18,23 @@
 #include <Switch.h>
 #include <Remote.h>
 
-//Pin Definitionen (when using 644P(A): use Standard Pinout)
+#ifdef __AVR_ATmega328P__
+#define CONFIG_BUTTON_PIN 8
+#define WSLED_PIN         9
+#define ONBOARD_LED_PIN1  4
+#define ONBOARD_LED_PIN2  5
+#define CC1101_CS         10
+#define CC1101_GDO0       2
+#define BTN1_PIN          14
+#define BTN2_PIN          15
+#define BTN3_PIN          16
+#define BTN4_PIN          17
+#define BTN5_PIN          18
+#define BTN6_PIN          19
+#endif
 
+#ifdef __AVR_ATmega644P__
+//Pin Definitionen (when using 644P(A): use Standard Pinout)
 #define CONFIG_BUTTON_PIN 1       //PB1
 #define WSLED_PIN         13      //PD5
 #define ONBOARD_LED_PIN1  18      //PC2
@@ -32,6 +47,7 @@
 #define BTN4_PIN          27      //PA3
 #define BTN5_PIN          28      //PA4
 #define BTN6_PIN          29      //PA5
+#endif
 
 
 //Einstellungen für die RGB LEDs
