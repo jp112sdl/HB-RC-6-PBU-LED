@@ -253,18 +253,14 @@ class LEDChannel : public ActorChannel<Hal, LEDList1, OUList3, PEERS_PER_LED_CHA
 
     void setLedColor(uint8_t val) {
       switch (val) {
-        case 0:
-          color = 0; // Black;
-          brightness = 0;
-          break;
         case 11:
-          color = 0; // Red;
+          color = 0;   // Red;
           break;
         case 21:
-          color = 96; // Green;
+          color = 96;  // Green;
           break;
         case 31:
-          color = 64; // Yellow;
+          color = 64;  // Yellow;
           break;
         case 41:
           color = 171; // Blue;
@@ -280,6 +276,10 @@ class LEDChannel : public ActorChannel<Hal, LEDList1, OUList3, PEERS_PER_LED_CHA
           break;
         case 81:
           color = 32;  // Orange;
+          break;
+        default:
+          color = 0;   // Black;
+          brightness = 0;
           break;
       }
       updateLED();
@@ -332,11 +332,11 @@ class LEDChannel : public ActorChannel<Hal, LEDList1, OUList3, PEERS_PER_LED_CHA
         typename OUList3::PeerList pl = lg ? l3.lg() : l3.sh();
         if ( lg == false || cnt != lastmsgcnt || pl.multiExec() == true ) {
           lastmsgcnt = cnt;
-          DPRINT(F("ACT_TYPE   ")); DDECLN(pl.actType());  // Farbe
-          DPRINT(F("ACT_NUM    ")); DDECLN(pl.actNum());   // BPM
-          DPRINT(F("ACT_INTENS ")); DDECLN(pl.actIntens());// Helligkeit
-          DPRINT(F("OFFDELAY   ")); DDECLN(pl.offDly());   // Ausschaltverzögerung
-           if (pl.actType() == 0) {
+          //DPRINT(F("ACT_TYPE   ")); DDECLN(pl.actType());  // Farbe
+          //DPRINT(F("ACT_NUM    ")); DDECLN(pl.actNum());   // BPM
+          //DPRINT(F("ACT_INTENS ")); DDECLN(pl.actIntens());// Helligkeit
+          //DPRINT(F("OFFDELAY   ")); DDECLN(pl.offDly());   // Ausschaltverzögerung
+          if (pl.actType() == 0) {
             ledOff(true);
           } else {
             setLedColor(pl.actType());
