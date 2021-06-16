@@ -43,9 +43,9 @@
 #define ONBOARD_LED_PIN2   19      //PC3
 #define CC1101_CS           4      //PB4
 #define CC1101_GDO0        10      //PD2
-#define BTN1_PIN           24      //PA0
+#define BTN1_PIN           26      //PA2
 #define BTN2_PIN           25      //PA1
-#define BTN3_PIN           26      //PA2
+#define BTN3_PIN           24      //PA0
 #define BTN4_PIN           27      //PA3
 #define BTN5_PIN           28      //PA4
 #define BTN6_PIN           29      //PA5
@@ -54,7 +54,8 @@
 
 //Einstellungen für die RGB LEDs
 #define WSNUM_LEDS    6
-#define WSLED_TYPE    SK6812    //LED Typ
+#define WSLED_TYPE    SK6812     //LED Typ
+//#define WSLED_TYPE    WS2812     //LED Typ
 #define WSCOLOR_ORDER GRB        //Farbreihenfolge
 
 #define PEERS_PER_LED_CHANNEL  4
