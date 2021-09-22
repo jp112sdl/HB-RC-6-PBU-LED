@@ -324,6 +324,85 @@ class LEDChannel : public ActorChannel<Hal, LEDList1, OUList3, PEERS_PER_LED_CHA
       return true;
     }
 
+    uint8_t getConditionForStatePl(uint8_t stat,const SwPeerListEx& lst) const {
+      switch( stat ) {
+        case AS_CM_JT_ONDELAY:  return lst.ctDlyOn();
+        case AS_CM_JT_ON:       return lst.ctOn();
+        case AS_CM_JT_OFFDELAY: return lst.ctDlyOff();
+        case AS_CM_JT_OFF:      return lst.ctOff();
+      }
+      return AS_CM_CT_X_GE_COND_VALUE_LO;
+    }
+
+    void runPl (const SwPeerListEx& pl,uint8_t cnt, uint8_t nextstate) {
+      if (cnt != lastmsgcnt) {
+       lastmsgcnt = cnt;
+       DPRINT("runPl ");DDECLN(number());
+
+       //DPRINT(F("ACT_TYPE   ")); DDECLN(pl.actType());  // Farbe
+       //DPRINT(F("ACT_NUM    ")); DDECLN(pl.actNum());   // BPM
+       //DPRINT(F("ACT_INTENS ")); DDECLN(pl.actIntens());// Helligkeit
+       //DPRINT(F("OFFDELAY   ")); DDECLN(pl.offDly());   // Ausschaltverzögerung
+       if (pl.actType() == 0 || nextstate == AS_CM_JT_OFF || nextstate == AS_CM_JT_OFFDELAY) {
+         ledOff(true);
+       } else {
+         setLedColor(pl.actType());
+         setLedBrightness(pl.actIntens());
+         if (pl.offDly() > 0)
+           setLedOffDelay(AskSinBase::byteTimeCvt(pl.offDly()));
+         ledOn(true);
+         setLedBlink(pl.actNum());
+       }
+      }
+    }
+
+
+    void sensorPl (const SwPeerListEx& lst,uint8_t counter,uint8_t value) {
+      uint8_t cond = getConditionForStatePl(state,lst);
+      DPRINT("state = ");DDEC(state);DPRINT(", cond = ");DDEC(cond);DPRINT(", value = ");DDECLN(value);
+      bool doit = false;
+      switch( cond ) {
+      case AS_CM_CT_X_GE_COND_VALUE_LO:
+        doit = (value >= lst.ctValLo());
+        break;
+      case AS_CM_CT_X_GE_COND_VALUE_HI:
+        doit = (value >= lst.ctValHi());
+        break;
+      case AS_CM_CT_X_LT_COND_VALUE_LO:
+        doit = (value < lst.ctValLo());
+        break;
+      case AS_CM_CT_X_LT_COND_VALUE_HI:
+        doit = (value < lst.ctValHi());
+        break;
+      case AS_CM_CT_COND_VALUE_LO_LE_X_LT_COND_VALUE_HI:
+        doit = ((lst.ctValLo() <= value) && (value < lst.ctValHi()));
+        break;
+      case AS_CM_CT_X_LT_COND_VALUE_LO_OR_X_GE_COND_VALUE_HI:
+        doit =((value < lst.ctValLo()) || (value >= lst.ctValHi()));
+        break;
+      }
+      if( doit == true ) {
+        runPl(lst,counter, getNextState());
+      }
+    }
+
+    bool process (const SensorEventMsg& msg) {
+      bool lg = msg.isLong();
+      Peer p(msg.peer());
+      uint8_t cnt = msg.counter();
+      uint8_t value = msg.value();
+      OUList3 l3 = BaseChannel::getList3(p);
+      if( l3.valid() == true ) {
+        typename OUList3::PeerList pl = lg ? l3.lg() : l3.sh();
+        if (lg == false || pl.multiExec() == false ) {
+          DPRINTLN("SensorEventMsg");
+          sensorPl(pl,cnt,value);
+        }
+        return true;
+      }
+      return false;
+    }
+
     bool process (const RemoteEventMsg& msg) {
       bool lg = msg.isLong();
       Peer p(msg.peer());
@@ -331,27 +410,24 @@ class LEDChannel : public ActorChannel<Hal, LEDList1, OUList3, PEERS_PER_LED_CHA
       OUList3 l3 = BaseChannel::getList3(p);
       if ( l3.valid() == true ) {
         typename OUList3::PeerList pl = lg ? l3.lg() : l3.sh();
-        if ( lg == false || cnt != lastmsgcnt || pl.multiExec() == true ) {
-          lastmsgcnt = cnt;
-          //DPRINT(F("ACT_TYPE   ")); DDECLN(pl.actType());  // Farbe
-          //DPRINT(F("ACT_NUM    ")); DDECLN(pl.actNum());   // BPM
-          //DPRINT(F("ACT_INTENS ")); DDECLN(pl.actIntens());// Helligkeit
-          //DPRINT(F("OFFDELAY   ")); DDECLN(pl.offDly());   // Ausschaltverzögerung
-          if (pl.actType() == 0) {
-            ledOff(true);
-          } else {
-            setLedColor(pl.actType());
-            setLedBrightness(pl.actIntens());
-            if (pl.offDly() > 0)
-              setLedOffDelay(AskSinBase::byteTimeCvt(pl.offDly()));
-            ledOn(true);
-            setLedBlink(pl.actNum());
+        if (lg == false || pl.multiExec() == false ) {
+          switch (pl.actionType()) {
+          case AS_CM_ACTIONTYPE_JUMP_TO_TARGET:
+            runPl(pl, cnt, AS_CM_JT_ON);
+            break;
+          case AS_CM_ACTIONTYPE_TOGGLE_TO_COUNTER:
+            runPl(pl, cnt, (cnt & 0x01) == 0x01 ? AS_CM_JT_ON : AS_CM_JT_OFF);
+            break;
+          case AS_CM_ACTIONTYPE_TOGGLE_INVERSE_TO_COUNTER:
+            runPl(pl, cnt, (cnt & 0x00) == 0x01 ? AS_CM_JT_ON : AS_CM_JT_OFF);
+            break;
           }
         }
         return true;
       }
       return false;
     }
+
 
     void init() {
       ledOff(true);
